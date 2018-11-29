@@ -1,0 +1,571 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template creates a Prometheus cluster using Amazon EC2 AutoScaling groups.
+  
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: ASG cluster configuration
+        Parameters:
+          - AsgMaxSize
+          - AsgMinSize
+          - SubnetList
+          - VpcId
+          - InstanceType
+          - Ami
+          - KeyName
+
+      - Label:
+          default: Prometheus configuration
+        Parameters:
+          - PrometheusVersion
+          - Environment
+          - Exposure
+          - HostedZoneId
+          - DnsName
+          - UseSsl
+          - CertificateArn
+          - PrometheusConfigurationPathS3
+          - PrometheusAlertsPathS3
+          - ConsulEndpoint
+          - UseConsulTemplateToGenerateFile
+          - StorageTsdbRetention
+          - StorageTsdbMaxBlockDuration
+          - StorageTsdbMinBlockDuration
+          - QueryMaxConcurrency
+          - QueryMaxConnections
+          - LogLevel
+
+    ParameterLabels:
+      Ami:
+        default: The AMI used to start the cluster instances
+      AsgMaxSize:
+        default: The maximum number of instances to launch
+      AsgMinSize:
+        default: The minimum number of instances to keep in service
+      SubnetList:
+        default: The subnets in which the instances can run
+      VpcId:
+        default: The VPC to which the subnets belong
+      PrometheusVersion:
+        default: The Prometheus version to launch
+      Environment:
+        default: The environment for which the Prometheus cluster will scrape targets
+      InstanceType:
+        default: The instance size to use for the Prometheus cluster
+      KeyName:
+        default: The SSH key to use for booting up the instances
+      Exposure:
+        default: Whether to set the Prometheus load balancer as internet-facing or internal
+      HostedZoneId:
+        default: The Hosted Zone ID to use in Route53 to expose the Prometheus DnsName
+      DnsName:
+        default: The value of the Prometheus hostname
+      UseSsl:
+        default: Whether to use SSL when connecting via load balancer
+      CertificateArn:
+        default: The Certificate ARN to use when UseSsl is set to "true"
+      PrometheusConfigurationPathS3:
+        default: The path to your Prometheus configuration (prometheus.yaml)
+      PrometheusAlertsPathS3:
+        default: The path to your Prometheus alert rules (alert-rules.yaml)
+      ConsulEndpoint:
+        default: The consul endpoint to connect to for configuration details
+      UseConsulTemplateToGenerateFile:
+        default: Whether to use consul-template to generate file
+      StorageTsdbRetention:
+        default: The amount of data to keep in storage (default is 15 days)
+      StorageTsdbMaxBlockDuration:
+        default: The maximum block value to store data for (default is 36 hours)
+      StorageTsdbMinBlockDuration:
+        default: The minimum block value to store data for (default is 2 hours)
+      QueryMaxConcurrency:
+        default: The maximum concurrency level for queries (default is 20)
+      QueryMaxConnections:
+        default: The maximum amount of connections (default is 512)
+      LogLevel:
+        default: The log level (default is info)
+      
+Parameters:
+  Ami:
+    Type: String
+    Default: ami-013be31976ca2c322
+    Description: For optimal performance, use the latest Amazon Linux AMI (HVM) available
+  AsgMaxSize:
+    Type: Number
+    Default: 6
+  AsgMinSize:
+    Type: Number
+    Default: 4
+  SubnetList:
+    Type: List<AWS::EC2::Subnet::Id>
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PrometheusVersion:
+    Type: String
+    Default: '2.5.0'
+  PrometheusConfigurationPathS3:
+    Type: String
+    Default: s3://netbears-prometheus/prometheus.yaml
+  PrometheusAlertsPathS3:
+    Type: String
+    Default: s3://netbears-prometheus/alert-rules.yaml
+  Environment:
+    Type: String
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+    Default: dev
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  Exposure:
+    Type: String
+    AllowedValues:
+    - internet-facing
+    - internal
+    Default: internet-facing
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+  DnsName:
+    Type: String
+    Default: prometheus.aws.netbears.com
+  ConsulEndpoint:
+    Type: String
+    Default: consul.aws.netbears.com
+  UseConsulTemplateToGenerateFile:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+    - 'true'
+    - 'false'
+  StorageTsdbRetention:
+    Type: String
+    Default: 15d
+  StorageTsdbMaxBlockDuration:
+    Type: String
+    Default: 36h
+  StorageTsdbMinBlockDuration:
+    Type: String
+    Default: 2h
+  QueryMaxConcurrency:
+    Type: String
+    Default: '20'
+  QueryMaxConnections:
+    Type: String
+    Default: '512'
+  LogLevel:
+    Type: String
+    Default: info
+  UseSsl:
+    Type: String
+    AllowedValues:
+    - true
+    - false
+    Default: true
+  CertificateArn:
+    Type: String
+  InstanceType:
+    Type: String
+    AllowedValues:
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
+    - m5.12xlarge
+    - m5.24xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - m4.16xlarge
+    - c5.large
+    - c5.xlarge
+    - c5.2xlarge
+    - c5.4xlarge
+    - c5.9xlarge
+    - c5.18xlarge
+    - c4.large
+    - c4.xlarge
+    - c4.2xlarge
+    - c4.4xlarge
+    - c4.8xlarge
+    - g3.4xlarge
+    - g3.8xlarge
+    - g3.16xlarge
+    - g2.2xlarge
+    - g2.8xlarge
+    - r4.large
+    - r4.xlarge
+    - r4.2xlarge
+    - r4.4xlarge
+    - r4.8xlarge
+    - r4.16xlarge
+    - d2.xlarge
+    - d2.2xlarge
+    - d2.4xlarge
+    - d2.8xlarge
+    - i3.large
+    - i3.xlarge
+    - i3.2xlarge
+    - i3.4xlarge
+    - i3.8xlarge
+    - i3.16xlarge
+    - i2.xlarge
+    - i2.2xlarge
+    - i2.4xlarge
+    - i2.8xlarge
+
+Conditions:
+  LoadBalancerSsl: 
+    Fn::Equals:
+      - Ref: UseSsl
+      - true
+
+Resources: 
+  HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AWSOpsWorksFullAccess
+      - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+      - arn:aws:iam::aws:policy/CloudWatchFullAccess
+      - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+  HostProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - Ref: HostRole
+
+  Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:
+        Fn::Sub: ${AWS::StackName}-Sg
+      VpcId:
+        Ref: VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        Ref: SubnetList
+      HealthCheckGracePeriod: '600'
+      HealthCheckType: EC2
+      LoadBalancerNames:
+        - Ref: PrometheusElb
+      LaunchConfigurationName:
+        Ref: Lc
+      MinSize:
+        Ref: AsgMinSize
+      MaxSize:
+        Ref: AsgMaxSize
+      DesiredCapacity:
+        Ref: AsgMinSize
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: PrometheusASG-${AWS::StackName}
+        PropagateAtLaunch: true
+      - Key: Team
+        Value: NETBEARS
+        PropagateAtLaunch: true
+      - Key: Application
+        Value: Prometheus
+        PropagateAtLaunch: true
+      - Key: Environment
+        Value:
+          Ref: Environment
+        PropagateAtLaunch: true
+      - Key: StackName
+        Value:
+          Ref: AWS::StackName
+        PropagateAtLaunch: true
+      MetricsCollection:
+      - Metrics:
+        - GroupTotalInstances
+        Granularity: 1Minute
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService:
+          Ref: AsgMinSize
+        MaxBatchSize: 1
+        PauseTime: PT10M
+        SuspendProcesses:
+        - AZRebalance
+        - AlarmNotification
+        - HealthCheck
+        - ReplaceUnhealthy
+        - ScheduledActions
+
+  Lc:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId:
+        Ref: Ami
+      EbsOptimized: true
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda
+        Ebs:
+          VolumeType: gp2
+          VolumeSize: 100
+      InstanceType:
+        Ref: InstanceType
+      IamInstanceProfile:
+        Ref: HostProfile
+      KeyName:
+        Ref: KeyName
+      SecurityGroups:
+      - Ref: Sg
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #cloud-config
+            packages:
+            - aws-cli
+            - jq
+            - ntp
+            - curl
+            - git
+            - gcc
+            - wget
+            - python27-devel
+            - python27-pip
+            - net-tools
+            - bind-tools
+            - htop
+            - zip
+            - unzip
+            write_files:
+            - path: /etc/prometheus/start.sh
+              content: |
+                #!/usr/bin/env bash
+                if [ "${UseConsulTemplateToGenerateFile}" == "false" ]; then
+                  aws s3 cp ${PrometheusConfigurationPathS3} /etc/prometheus/prometheus.yaml
+                  aws s3 cp ${PrometheusAlertsPathS3} /etc/prometheus/alert-rules.yaml
+                  /usr/local/bin/prometheus \
+                      --config.file=/etc/prometheus/prometheus.yaml \
+                      --storage.tsdb.path=/prometheus \
+                      --web.external-url=http://${DnsName} \
+                      --web.enable-lifecycle \
+                      --web.enable-admin-api \
+                      --storage.tsdb.retention=${StorageTsdbRetention} \
+                      --storage.tsdb.max-block-duration=${StorageTsdbMaxBlockDuration} \
+                      --storage.tsdb.min-block-duration=${StorageTsdbMinBlockDuration} \
+                      --query.max-concurrency=${QueryMaxConcurrency} \
+                      --web.max-connections=${QueryMaxConnections} \
+                      --log.level=${LogLevel}
+                else
+                  aws s3 cp ${PrometheusConfigurationPathS3} /etc/prometheus/prometheus.yaml.ctmpl
+                  aws s3 cp ${PrometheusAlertsPathS3} /etc/prometheus/alert-rules.yaml.ctmpl
+                  /usr/local/bin/consul-template \
+                    -config "/etc/consul-template.d/consul_template_config.hcl" \
+                    -exec "/usr/local/bin/prometheus \
+                      --config.file=/etc/prometheus/prometheus.yaml \
+                      --storage.tsdb.path=/prometheus \
+                      --web.external-url=http://${DnsName} \
+                      --web.enable-lifecycle \
+                      --web.enable-admin-api \
+                      --storage.tsdb.retention=${StorageTsdbRetention} \
+                      --storage.tsdb.max-block-duration=${StorageTsdbMaxBlockDuration} \
+                      --storage.tsdb.min-block-duration=${StorageTsdbMinBlockDuration} \
+                      --query.max-concurrency=${QueryMaxConcurrency} \
+                      --web.max-connections=${QueryMaxConnections} \
+                      --log.level=${LogLevel}"
+                fi
+              permissions: '0755'
+            - path: /etc/consul-template.d/consul_template_config.hcl
+              content: |
+                {
+                  "consul": {
+                    "auth": {
+                      "enabled": false
+                    },
+                    "address": "${ConsulEndpoint}:8500",
+                    "retry": {
+                      "enabled": true,
+                      "attempts": -1,
+                      "backoff": "250ms",
+                      "max_backoff": "1m"
+                    },
+                    "ssl": {
+                      "enabled": false
+                    }
+                  },
+                  "reload_signal": "SIGHUP",
+                  "kill_signal": "SIGINT",
+                  "max_stale": "10m",
+                  "log_level": "warn",
+                  "wait": {
+                    "min": "5s",
+                    "max": "10s"
+                  },
+                  "deduplicate": {
+                    "enabled": true,
+                    "prefix": "consul-template/dedup/prometheus/${PrometheusVersion}"
+                  },
+                  "template": [
+                    {
+                      "source": "/etc/prometheus/alert-rules.yaml.ctmpl",
+                      "destination": "/etc/prometheus/alert-rules.yaml",
+                      "perms": "0644",
+                      "backup": true,
+                      "left_delimiter": "{{",
+                      "right_delimiter": "}}",
+                      "wait": {
+                        "min": "2s",
+                        "max": "10s"
+                      }
+                    },
+                    {
+                      "source": "/etc/prometheus/prometheus.yaml.ctmpl",
+                      "destination": "/etc/prometheus/prometheus.yaml",
+                      "perms": "0644",
+                      "backup": true,
+                      "left_delimiter": "{{",
+                      "right_delimiter": "}}",
+                      "wait": {
+                        "min": "2s",
+                        "max": "10s"
+                      }
+                    }
+                  ]
+                }
+              permissions: '0644'
+            runcmd:
+            - mkdir -p /prometheus
+            - mkdir -p /etc/prometheus
+            - mkdir -p /etc/consul-template.d
+            - wget https://github.com/prometheus/prometheus/releases/download/v${PrometheusVersion}/prometheus-${PrometheusVersion}.linux-amd64.tar.gz
+            - tar xzf prometheus-${PrometheusVersion}.linux-amd64.tar.gz
+            - cp prometheus-${PrometheusVersion}.linux-amd64/prometheus /usr/local/bin/prometheus
+            - cp prometheus-${PrometheusVersion}.linux-amd64/promtool /usr/local/bin/promtool
+            - chmod +x /usr/local/bin/prometheus /usr/local/bin/promtool
+            - wget https://github.com/prometheus/node_exporter/releases/download/v0.16.0/node_exporter-0.16.0.linux-amd64.tar.gz
+            - tar xvf node_exporter-0.16.0.linux-amd64.tar.gz
+            - cp node_exporter-0.16.0.linux-amd64/node_exporter /usr/local/bin
+            - chmod +x /usr/local/bin/node_exporter
+            - /usr/local/bin/node_exporter &
+            - wget https://releases.hashicorp.com/consul-template/0.19.0/consul-template_0.19.0_linux_amd64.zip
+            - unzip consul-template_0.19.0_linux_amd64.zip
+            - cp consul-template /usr/local/bin/consul-template
+            - chmod +x /usr/local/bin/consul-template
+            - /etc/prometheus/start.sh
+            
+  CpuUtilizationTargetTracking:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName:
+        Ref: ASG
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+
+  PrometheusElb:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      ConnectionSettings:
+        IdleTimeout: 70
+      HealthCheck:
+        HealthyThreshold: 3
+        Interval: 5
+        Target: HTTP:9090/graph
+        Timeout: 3
+        UnhealthyThreshold: 2
+      Listeners:
+      - InstancePort: 9090
+        LoadBalancerPort: 80
+        Protocol: HTTP
+      - InstancePort: 9090
+        LoadBalancerPort: 9090
+        Protocol: HTTP
+      - Fn::If:
+        - LoadBalancerSsl
+        - InstancePort: 9090
+          LoadBalancerPort: 443
+          Protocol: HTTPS
+          SSLCertificateId:
+            Ref: CertificateArn
+        - Ref: AWS::NoValue
+      Scheme:
+        Ref: Exposure
+      SecurityGroups:
+      - Ref: Sg
+      Subnets:
+        Ref: SubnetList
+      Tags:
+      - Key: Team
+        Value: NETBEARS
+      - Key: Application
+        Value: Prometheus
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: StackName
+        Value:
+          Ref: AWS::StackName
+
+  PrometheusDnsRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId:
+        Ref: HostedZoneId
+      Comment: 
+        Fn::Sub: Route53-record-for-${AWS::StackName}.
+      RecordSets:
+      - Name:
+          Ref: DnsName
+        Type: A
+        AliasTarget:
+          HostedZoneId:
+            Fn::GetAtt: PrometheusElb.CanonicalHostedZoneNameID
+          DNSName:
+            Fn::GetAtt: PrometheusElb.DNSName
+
+Outputs:
+
+  ConsulUi:
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrometheusDnsRecord
+    Value:
+      Fn::If:
+        - LoadBalancerSsl
+        - Fn::Sub: https://${DnsName}/graph
+        - Fn::Sub: http://${DnsName}/graph
+
+  PrometheusElbCanonicalHostedZoneNameID:
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrometheusElbCanonicalHostedZoneNameID
+    Value:
+      Fn::GetAtt: PrometheusElb.CanonicalHostedZoneNameID
+
+  PrometheusElbDNSName:
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrometheusElbDNSName
+    Value:
+      Fn::GetAtt: PrometheusElb.DNSName
