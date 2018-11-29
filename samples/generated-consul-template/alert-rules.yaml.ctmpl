@@ -38,6 +38,7 @@ groups:
     annotations:
       summary: 'Service {{ $service_key }} did not have any instances running in the last 5 minutes.'
       metric: 'is_alive_instance?'
+      microservice: {{ $service_key }}
     labels:
       severity: 'critical'
 
@@ -47,6 +48,7 @@ groups:
     annotations:
       summary: '{{ $service_key }} has had CPU Utilization of more than 80% for the last 15 minutes.'
       metric: 'cpu'
+      microservice: {{ $service_key }}
     labels:
       severity: 'critical'
 
@@ -56,6 +58,7 @@ groups:
     annotations:
       summary: '{{ $service_key }} has had total RAM Utilization of more than 80% for the last 15 minutes.'
       metric: 'ram'
+      microservice: {{ $service_key }}
     labels:
       severity: 'critical'
 
@@ -65,6 +68,7 @@ groups:
     annotations:
       summary: '{{ $service_key }} is running out of space for root mountpoint.'
       metric: 'root_disk'
+      microservice: {{ $service_key }}
     labels:
       severity: 'critical'
 
