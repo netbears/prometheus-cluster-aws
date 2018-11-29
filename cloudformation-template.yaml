@@ -308,7 +308,7 @@ Resources:
         MinInstancesInService:
           Ref: AsgMinSize
         MaxBatchSize: 1
-        PauseTime: PT10M
+        PauseTime: PT3M
         SuspendProcesses:
         - AZRebalance
         - AlarmNotification
