@@ -95,10 +95,10 @@ Parameters:
     Description: For optimal performance, use the latest Amazon Linux AMI (HVM) available
   AsgMaxSize:
     Type: Number
-    Default: 6
+    Default: 2
   AsgMinSize:
     Type: Number
-    Default: 4
+    Default: 1
   SubnetList:
     Type: List<AWS::EC2::Subnet::Id>
   VpcId:
@@ -585,7 +585,7 @@ Resources:
 
 Outputs:
 
-  ConsulUi:
+  PrometheusUi:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-PrometheusDnsRecord
