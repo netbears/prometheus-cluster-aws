@@ -237,9 +237,7 @@ Resources:
                 - ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/AWSOpsWorksFullAccess
       - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-      - arn:aws:iam::aws:policy/CloudWatchFullAccess
       - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
 
   HostProfile:
@@ -357,6 +355,38 @@ Resources:
             - zip
             - unzip
             write_files:
+            - path: /etc/consul/consul.json
+              content: |
+                {
+                  "client_addr": "0.0.0.0",
+                  "data_dir": "/opt/consul-data",
+                  "datacenter": "${Environment}01-consul",
+                  "ports": {
+                    "dns": 8600,
+                    "http": 8500,
+                    "serf_lan": 8301,
+                    "serf_wan": 8302,
+                    "server": 8300
+                  },
+                  "retry_join": [
+                    "${ConsulEndpoint}"
+                  ],
+                  "verify_incoming": false,
+                  "verify_outgoing": false
+                }
+              permissions: '0644'
+            - path: /etc/consul/conf.d/prometheus.json
+              content: |
+                {
+                  "service": {
+                    "tags": [
+                      "prometheus",
+                      "infrastructure"
+                    ],
+                    "name": "prometheus"
+                  }
+                }
+              permissions: '0644'
             - path: /etc/prometheus/start.sh
               content: |
                 #!/usr/bin/env bash
@@ -378,6 +408,7 @@ Resources:
                 else
                   aws s3 cp ${PrometheusConfigurationPathS3} /etc/prometheus/prometheus.yaml.ctmpl
                   aws s3 cp ${PrometheusAlertsPathS3} /etc/prometheus/alert-rules.yaml.ctmpl
+                  /usr/local/bin/consul agent -config-file=/etc/consul/consul.json -config-dir=/etc/consul/conf.d &
                   /usr/local/bin/consul-template \
                     -config "/etc/consul-template.d/consul_template_config.hcl" \
                     -exec "/usr/local/bin/prometheus \
@@ -470,6 +501,14 @@ Resources:
             - unzip consul-template_0.19.0_linux_amd64.zip
             - cp consul-template /usr/local/bin/consul-template
             - chmod +x /usr/local/bin/consul-template
+            - curl -O https://releases.hashicorp.com/consul/1.4.0/consul_1.4.0_linux_amd64.zip
+            - unzip consul_1.4.0_linux_amd64.zip
+            - rm -f consul_1.4.0_linux_amd64.zip
+            - mv consul /usr/local/bin
+            - chmod +x /usr/local/bin/consul
+            - mkdir -p /var/lib/consul
+            - mkdir -p /etc/consul/conf.d
+            - mkdir -p /opt/consul-data
             - /etc/prometheus/start.sh
             
   CpuUtilizationTargetTracking:

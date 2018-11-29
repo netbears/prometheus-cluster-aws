@@ -1,0 +1,71 @@
+{{- $alertmanager := "alertmanager" -}}
+{{- $alertrules := "alert_rules" -}}
+{{- $enabledefaultalerts := "enable_default_alerts" -}}
+groups:
+- name: /etc/prometheus/alert-rules.yaml
+  rules:
+{{- range $service_key, $pairs := tree "microservices/configuration" | byKey }}
+{{- if keyOrDefault (printf "microservices/configuration/%s/%s/enabled" $service_key $alertmanager) "true" | parseBool }}
+{{- if keyExists (printf "microservices/configuration/%s/%s/%s" $service_key $alertmanager $alertrules) }}
+{{- with $d := key (printf "microservices/configuration/%s/%s/%s" $service_key $alertmanager $alertrules) | parseJSON -}}
+{{- range $alertcfg := $d}}
+{{- if $alertcfg.ALERT  }}
+  - alert: {{ $service_key }}_{{ $alertcfg.ALERT }}-CUSTOM
+    expr: {{ $alertcfg.CONDITION }}
+  {{- if $alertcfg.FOR }}
+    for: {{ $alertcfg.FOR }}
+  {{- end }}
+  {{- if $alertcfg.LABELS }}
+    labels:
+  {{- range $labelcfg := $alertcfg.LABELS }}
+      {{ $labelcfg.name }}: '{{ $labelcfg.value -}}'
+  {{ end -}}{{- end -}}
+  {{- if $alertcfg.ANNOTATIONS }}
+    annotations:
+  {{- range $annotationscfg := $alertcfg.ANNOTATIONS }}
+      {{ $annotationscfg.name }}: '{{ $annotationscfg.value -}}'
+  {{- end }}{{- end }}
+{{- end }}{{ end }}
+{{ end }}{{ end }}{{- end -}}{{- end -}}  
+
+
+{{ range $service_key, $pairs := tree "microservices/configuration" | byKey }}
+{{- if keyOrDefault (printf "microservices/configuration/%s/%s/%s" $service_key $alertmanager $enabledefaultalerts) "true" | parseBool }}
+{{- if keyOrDefault (printf "microservices/configuration/%s/%s/enabled" $service_key $alertmanager) "true" | parseBool }}
+  - alert: {{ $service_key }}_instances_alive-DEFAULT_ALERT
+    expr: absent(node_memory_Active{microservice='{{ $service_key }}'}) > 0
+    for: 5m
+    annotations:
+      summary: 'Service {{ $service_key }} did not have any instances running in the last 5 minutes.'
+      metric: 'is_alive_instance?'
+    labels:
+      severity: 'critical'
+
+  - alert: {{ $service_key }}_cpu_usage-DEFAULT_ALERT
+    expr: 100 * (sum by (hostname,environment,microservice)(irate(node_cpu{microservice=~'{{ $service_key }}'}[5m])) - sum by (hostname,environment,microservice)(irate(node_cpu{microservice=~'{{ $service_key }}',mode='idle'}[5m]))) / sum by (hostname,environment,microservice)(irate(node_cpu{microservice=~'{{ $service_key }}'}[5m])) > 80
+    for: 15m
+    annotations:
+      summary: '{{ $service_key }} has had CPU Utilization of more than 80% for the last 15 minutes.'
+      metric: 'cpu'
+    labels:
+      severity: 'critical'
+
+  - alert: {{ $service_key }}_memory_usage-DEFAULT_ALERT
+    expr: 100 * ((sum by (hostname,environment,microservice)(node_memory_MemTotal{microservice=~'{{ $service_key }}'}) - sum by (hostname,environment,microservice)(node_memory_MemFree{microservice=~'{{ $service_key }}'})) / sum by (hostname,environment,microservice)(node_memory_MemTotal{microservice=~'{{ $service_key }}'})) > 80
+    for: 15m
+    annotations:
+      summary: '{{ $service_key }} has had total RAM Utilization of more than 80% for the last 15 minutes.'
+      metric: 'ram'
+    labels:
+      severity: 'critical'
+
+  - alert: {{ $service_key }}_root_disk_usage-DEFAULT_ALERT
+    expr: 100.0 - 100 * (node_filesystem_avail{microservice=~'{{ $service_key }}',mountpoint='/'} / node_filesystem_size{microservice=~'{{ $service_key }}',mountpoint='/'}) > 80
+    for: 15m
+    annotations:
+      summary: '{{ $service_key }} is running out of space for root mountpoint.'
+      metric: 'root_disk'
+    labels:
+      severity: 'critical'
+
+{{- end }}{{- end }}{{- end }}
