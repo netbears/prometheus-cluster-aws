@@ -4,7 +4,7 @@ This is a tutorial on how to launch and manage a fully working Prometheus cluste
 
 The notes are also posted on the [NETBEARS](https://netbears.com/blog/monitoring-alerting-prometheus-aws/) company blog. You might want to check the website out for more tutorials like this.
 
-## What is Consul?
+## What is Prometheus?
 
 [Prometheus](https://prometheus.io/docs/introduction/overview/) is an open-source systems monitoring and alerting toolkit originally built at SoundCloud. Since its inception in 2012, many companies and organizations have adopted Prometheus, and the project has a very active developer and user community. It is now a standalone open source project and maintained independently of any company. To emphasize this, and to clarify the project's governance structure, Prometheus joined the Cloud Native Computing Foundation in 2016 as the second hosted project, after Kubernetes.
 
